@@ -1,0 +1,95 @@
+#include <Adafruit_Fingerprint.h>
+#include <SoftwareSerial.h>
+#include <Servo.h>
+#include <LiquidCrystal.h>
+
+// Fingerprint sensor setup
+SoftwareSerial mySerial(2, 3); // RX, TX
+Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
+
+// Servo motor for door
+Servo doorServo;
+#define SERVO_PIN 9
+#define DOOR_OPEN_ANGLE 90
+#define DOOR_CLOSE_ANGLE 0
+
+// LEDs and Buzzer
+#define LED_GRANT 4
+#define LED_DENY 5
+#define BUZZER 6
+
+// LCD setup (RS, EN, D4, D5, D6, D7)
+LiquidCrystal lcd(7, 8, 10, 11, 12, 13);
+
+void setup() {
+  Serial.begin(9600);
+  lcd.begin(16, 2); // 16x2 LCD
+  lcd.print("Fingerprint Auth");
+  delay(2000);
+
+  pinMode(LED_GRANT, OUTPUT);
+  pinMode(LED_DENY, OUTPUT);
+  pinMode(BUZZER, OUTPUT);
+
+  // Initialize fingerprint sensor
+  finger.begin(57600);
+  if (finger.verifyPassword()) {
+    lcd.clear();
+    lcd.print("Sensor Ready!");
+    delay(1000);
+  } else {
+    lcd.clear();
+    lcd.print("Sensor Error!");
+    while (1);
+  }
+
+  // Attach servo
+  doorServo.attach(SERVO_PIN);
+  doorServo.write(DOOR_CLOSE_ANGLE); // Close door initially
+}
+
+void loop() {
+  lcd.clear();
+  lcd.print("Place Finger...");
+  int result = getFingerprint();
+
+  if (result == FINGERPRINT_OK) {
+    // Access granted
+    lcd.clear();
+    lcd.print("Access Granted!");
+    digitalWrite(LED_GRANT, HIGH);
+    openDoor();
+    delay(3000);
+    closeDoor();
+    digitalWrite(LED_GRANT, LOW);
+  } else {
+    // Access denied
+    lcd.clear();
+    lcd.print("Access Denied!");
+    digitalWrite(LED_DENY, HIGH);
+    tone(BUZZER, 1000, 2000);
+    delay(3000);
+    digitalWrite(LED_DENY, LOW);
+  }
+}
+
+// Get fingerprint and return status
+int getFingerprint() {
+  int p = finger.getImage();
+  if (p != FINGERPRINT_OK) return -1;
+
+  p = finger.image2Tz();
+  if (p != FINGERPRINT_OK) return -1;
+
+  p = finger.fingerFastSearch();
+  return (p == FINGERPRINT_OK) ? p : -1;
+}
+
+// Control door servo
+void openDoor() {
+  doorServo.write(DOOR_OPEN_ANGLE);
+}
+
+void closeDoor() {
+  doorServo.write(DOOR_CLOSE_ANGLE);
+}
